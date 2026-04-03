@@ -26,7 +26,7 @@ function deconnexion() {
     }
 
     // Rediriger vers la page de connexion
-    redirectTo('../public/connexion.php');
+    redirectTo('connexion.php');
     exit();
 }
 
