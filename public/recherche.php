@@ -12,15 +12,14 @@ $dispo_only  = isset($_GET['dispo']) && $_GET['dispo'] === '1';
 $sort        = $_GET['sort'] ?? 'pertinence';
 
 // ── CATÉGORIES pour filtre ────────────────────────────────
-$categories = $connexion->query("SELECT id, name FROM categories WHERE is_active=1 ORDER BY sort_order ASC")->fetchAll();
+$categories = $connexion->query("SELECT id, name FROM categories ORDER BY sort_order ASC")->fetchAll();
 
 // ── REQUÊTE PRINCIPALE ────────────────────────────────────
 $where  = ['1=1'];
 $params = [];
 
 if ($q !== '') {
-    $where[] = "(p.name LIKE ? OR p.description LIKE ?)";
-    $params[] = "%$q%";
+    $where[] = "(p.name LIKE ?)";
     $params[] = "%$q%";
 }
 if ($cat_id > 0) {
@@ -322,7 +321,9 @@ $nb_panier    = array_sum(array_column($_SESSION['panier'] ?? [], 'qty'));
     <?php if ($cat_id || $price_min !== null || $price_max !== null || $dispo_only): ?>
     <div class="d-flex flex-wrap gap-2 mb-3">
       <?php if ($cat_id): ?>
-        <?php $catName = array_filter($categories, fn($c) => (int)$c['id'] === $cat_id); ?>
+        <?php
+        $catName = array_filter($categories, function($c) use ($cat_id) { return (int)$c['id'] === $cat_id; });
+        ?>
         <?php if ($catName): ?>
           <span style="background:rgba(38,208,206,.12);color:var(--cyan);border:1px solid rgba(38,208,206,.2);padding:3px 10px;border-radius:20px;font-size:.73rem;font-weight:500">
             📁 <?= htmlspecialchars(array_values($catName)[0]['name']) ?>
@@ -413,9 +414,10 @@ $nb_panier    = array_sum(array_column($_SESSION['panier'] ?? [], 'qty'));
 <!-- Footer -->
 <footer style="border-top:1px solid var(--border);margin-top:48px;padding:24px 16px;text-align:center;color:var(--muted);font-size:.78rem;">
   <div style="max-width:1280px;margin:0 auto;display:flex;justify-content:center;gap:24px;flex-wrap:wrap">
-    <a href="mentions-legales.php" style="color:var(--muted);text-decoration:none">Mentions légales</a>
-    <a href="cgu.php"              style="color:var(--muted);text-decoration:none">CGU</a>
-    <a href="contact.php"          style="color:var(--muted);text-decoration:none">Contact</a>
+    <a href="mention_legales.php" style="color:var(--muted);text-decoration:none">Mentions légales</a>
+    <a href="Cgu.php"             style="color:var(--muted);text-decoration:none">CGU</a>
+    <a href="Contact.php"         style="color:var(--muted);text-decoration:none">Contact</a>
+    <a href="a-propos.php"        style="color:var(--muted);text-decoration:none">À propos</a>
     <span>© 2025 CYNA-IT</span>
   </div>
 </footer>
@@ -442,12 +444,5 @@ if (isset($_SESSION['utilisateur_id'])) {
     $show_admin_link = $_SESSION['is_admin'] === 1;
 }
 ?>
-<?php if ($show_admin_link): ?>
-<div style="position:fixed;bottom:20px;right:20px;z-index:9999">
-  <a href="../admin/index.php" style="background:linear-gradient(135deg,#1a2980,#26d0ce);color:#fff;padding:8px 16px;border-radius:30px;font-size:.78rem;font-weight:600;text-decoration:none;box-shadow:0 4px 20px rgba(26,41,128,.4)">
-    ⚙ Administration
-  </a>
-</div>
-<?php endif; ?>
 </body>
 </html>

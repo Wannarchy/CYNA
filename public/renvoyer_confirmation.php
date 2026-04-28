@@ -159,12 +159,5 @@ if (isset($_SESSION['utilisateur_id'])) {
     $show_admin_link = $_SESSION['is_admin'] === 1;
 }
 ?>
-<?php if ($show_admin_link): ?>
-<div style="position:fixed;bottom:20px;right:20px;z-index:9999">
-  <a href="../admin/index.php" style="background:linear-gradient(135deg,#1a2980,#26d0ce);color:#fff;padding:8px 16px;border-radius:30px;font-size:.78rem;font-weight:600;text-decoration:none;box-shadow:0 4px 20px rgba(26,41,128,.4)">
-    ⚙ Administration
-  </a>
-</div>
-<?php endif; ?>
 </body>
 </html>

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/config.php';
 $nb_orders   = (int)$connexion->query("SELECT COUNT(*) FROM orders")->fetchColumn();
 $nb_products = (int)$connexion->query("SELECT COUNT(*) FROM products")->fetchColumn();
 $nb_cats     = (int)$connexion->query("SELECT COUNT(*) FROM categories")->fetchColumn();
+$nb_users    = (int)$connexion->query("SELECT COUNT(*) FROM utilisateurs WHERE is_admin=0")->fetchColumn();
 $revenue     = (float)$connexion->query("SELECT COALESCE(SUM(total),0) FROM orders")->fetchColumn();
 $cur = basename($_SERVER['PHP_SELF']);
 
@@ -16,6 +17,7 @@ $titles = [
   'home_text.php'  => 'Texte homepage',
   'orders.php'     => 'Commandes',
   'order_view.php' => 'Détail commande',
+  'users.php'      => 'Utilisateurs',
   'login.php'      => 'Connexion',
 ];
 $pageTitle = $titles[$cur] ?? 'Administration';
@@ -351,6 +353,13 @@ $pageTitle = $titles[$cur] ?? 'Administration';
       <?php if ($nb_orders > 0): ?>
         <span class="count"><?= $nb_orders ?></span>
       <?php endif; ?>
+    </a>
+    <a href="users.php" class="<?= $cur==='users.php'?'active':'' ?>">
+      <span class="icon">👥</span> Utilisateurs
+      <span class="count"><?= $nb_users ?></span>
+    </a>
+    <a href="chat_logs.php" class="<?= $cur==='chat_logs.php'?'active':'' ?>">
+      <span class="icon">💬</span> Chat logs
     </a>
   </nav>
 

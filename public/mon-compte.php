@@ -146,7 +146,10 @@ $total_spent = array_sum(array_column($orders, 'total'));
     <nav class="sb-nav">
       <a href="?tab=profil"    class="<?= $tab==='profil'   ?'active':'' ?>">◈ Mon profil</a>
       <a href="?tab=securite"  class="<?= $tab==='securite' ?'active':'' ?>">🔐 Sécurité</a>
-      <a href="?tab=commandes" class="<?= $tab==='commandes'?'active':'' ?>">
+      <a href="adresses.php">📍 Mes adresses</a>
+      <a href="paiements.php">💳 Paiements</a>
+      <a href="mes-abonnements.php">🔄 Abonnements</a>
+      <a href="mes-commandes.php">
         ◎ Mes commandes
         <?php if ($nb_orders>0): ?><span style="margin-left:auto;font-size:.65rem;font-weight:600;background:rgba(38,208,206,.15);color:var(--cyan);padding:1px 7px;border-radius:20px"><?= $nb_orders ?></span><?php endif; ?>
       </a>
