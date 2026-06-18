@@ -23,6 +23,23 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let onUnauthorized: (() => void) | null = null;
+
+export function setOnUnauthorized(callback: (() => void) | null) {
+  onUnauthorized = callback;
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      await AsyncStorage.multiRemove(['auth_token', 'user_data']);
+      onUnauthorized?.();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
 
 export const getFullImageUrl = (path: string | null | undefined): string => {
