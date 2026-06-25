@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setOnUnauthorized } from '../services/api';
 import { User } from '../types';
 
-const AUTH_TOKEN_KEY = 'auth_token';
+import { AUTH_TOKEN_KEY } from '../services/api';
 const USER_DATA_KEY = 'user_data';
 
 interface AuthResponse {

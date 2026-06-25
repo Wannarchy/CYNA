@@ -1,145 +1,141 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Image, ImageBackground, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React from 'react';
+import { View, Text, FlatList, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import api, { getFullImageUrl } from '../services/api';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import { Product } from '../types';
 
-export default function HomeScreen() {
-  const [activeSlide, setActiveSlide] = useState(0);
-  const navigation = useNavigation<any>();
+type CategoryScreenRouteProp = NativeStackScreenProps<RootStackParamList, 'Category'>['route'];
+type CategoryScreenNavigationProp = NativeStackScreenProps<RootStackParamList, 'Category'>['navigation'];
 
-  // --- REQUÊTES API ---
-  const { data: homeData, isLoading: loadingHome } = useQuery({
-    queryKey: ['homepage'],
-    queryFn: () => api.get('/homepage'),
-  });
+export default function CategoryScreen() {
+  const route = useRoute<CategoryScreenRouteProp>();
+  const navigation = useNavigation<CategoryScreenNavigationProp>();
+  const { categoryId, categoryName } = route.params;
 
-  const { data: categoriesData, isLoading: loadingCategories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.get('/categories'),
-  });
-
-  const { data: productsData, isLoading: loadingProducts } = useQuery({
+  // On récupère tous les produits (React Query va utiliser le cache si déjà chargé sur l'accueil)
+  const { data: productsData, isLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: () => api.get('/products'),
+    queryFn: async () => (await api.get('/products')).data,
   });
 
-  // --- EXTRACTION SÉCURISÉE DES DONNÉES ---
-  // On utilise Array.isArray pour être sûr à 100% que c'est un tableau
-  const slides = Array.isArray(homeData?.data?.slides) ? homeData.data.slides : [];
-  const contentText = homeData?.data?.content_text || '';
-  const categories = Array.isArray(categoriesData?.data) ? categoriesData.data : [];
-  const allProducts = Array.isArray(productsData?.data) ? productsData.data : [];
-  
-  const topProducts = allProducts
-    .filter((p: any) => p.is_featured)
-    .sort((a: any, b: any) => a.featured_order - b.featured_order);
+  // On récupère les catégories pour trouver le nom si on ne l'a pas passé en paramètres
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => (await api.get('/categories')).data,
+  });
 
-  // --- ÉTAT DE CHARGEMENT ---
-  if (loadingHome || loadingCategories || loadingProducts) {
+  // Déballage Laravel
+  const rawProducts = productsData?.data ?? productsData;
+  const allProducts: Product[] = Array.isArray(rawProducts) ? rawProducts : [];
+
+  const rawCategories = categoriesData?.data ?? categoriesData;
+  const allCategories = Array.isArray(rawCategories) ? rawCategories : [];
+
+  // FILTRAGE : On garde uniquement les produits de la catégorie cliquée
+  const filteredProducts = allProducts.filter(
+    (p) => String(p.category_id) === String(categoryId)
+  );
+
+  // Trouver le nom de la catégorie
+  const currentCategory = allCategories.find((c: any) => String(c.id) === String(categoryId));
+  const title = categoryName || currentCategory?.name || 'Catégorie';
+
+  if (isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#0056b3" />
-        <Text style={styles.loadingText}>Connexion au serveur CYNA...</Text>
       </View>
     );
   }
 
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      
-      {/* CARROUSEL */}
-      {slides.length > 0 && (
-        <View style={styles.carouselContainer}>
-          <ImageBackground source={{ uri: getFullImageUrl(slides[activeSlide].image_path) }} style={styles.carouselImage} imageStyle={{ opacity: 0.4 }}>
-            <View style={styles.overlay}>
-              <Text style={styles.carouselTitle}>{slides[activeSlide].title}</Text>
-              <Text style={styles.carouselSubtitle}>{slides[activeSlide].subtitle}</Text>
+  const renderProduct = ({ item }: { item: Product }) => (
+    <TouchableOpacity 
+      style={styles.productCard} 
+      activeOpacity={0.8}
+      onPress={() => navigation.navigate('Product', { productId: String(item.id) })}
+    >
+      <Image source={{ uri: getFullImageUrl(item.image_path) }} style={styles.productImage} />
+      <View style={styles.productInfo}>
+        <View style={styles.productHeader}>
+          <Text style={styles.productName}>{item.name}</Text>
+          {!item.is_available && (
+            <View style={styles.unavailableBadge}>
+              <Text style={styles.unavailableText}>Indisponible</Text>
             </View>
-          </ImageBackground>
-          <View style={styles.dotsContainer}>
-            {slides.map((_: any, index: number) => (
-              <View key={index} style={[styles.dot, activeSlide === index && styles.dotActive]} />
-            ))}
-          </View>
+          )}
         </View>
-      )}
+        <Text style={styles.productPrice}>À partir de {Number(item.price_monthly).toFixed(2)} €/mois</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#cbd5e1" style={{ marginRight: 15 }} />
+    </TouchableOpacity>
+  );
 
-      {/* TEXTE FIXE */}
-      {contentText !== '' && (
-        <View style={styles.contentBox}>
-          <Text style={styles.contentText}>{contentText}</Text>
-        </View>
-      )}
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#1E293B" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{title}</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
-      {/* GRILLE DE CATÉGORIES */}
-      {categories.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Nos Catégories</Text>
-          <View style={styles.gridContainer}>
-            {categories.map((cat: any) => (
-              <TouchableOpacity 
-                key={cat.id} 
-                style={styles.categoryCard}
-                onPress={() => navigation.navigate('Category', { categoryId: cat.id })}
-                activeOpacity={0.7}
-              >
-                <View style={styles.iconBg}>
-                  <Image source={{ uri: getFullImageUrl(cat.image_path) }} style={styles.categoryImage} />
-                </View>
-                <Text style={styles.categoryName}>{cat.name}</Text>
-              </TouchableOpacity>
-            ))}
+      {/* Liste des produits filtrés */}
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={{ padding: 20 }}
+        renderItem={renderProduct}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="file-tray-outline" size={60} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>Aucun service trouvé</Text>
+            <Text style={styles.emptySubtitle}>Il n'y a pas encore de produits dans cette catégorie.</Text>
           </View>
-        </>
-      )}
-
-      {/* TOP PRODUITS */}
-      {topProducts.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Les Top Produits du moment</Text>
-          <View style={styles.gridContainer}>
-            {topProducts.map((prod: any) => (
-              <TouchableOpacity key={prod.id} style={styles.productCard} activeOpacity={0.8}>
-                <Image source={{ uri: getFullImageUrl(prod.image_path) }} style={styles.productImage} />
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{prod.name}</Text>
-                  <Text style={styles.productPrice}>À partir de {prod.price_monthly} €/mois</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      )}
-
-      <View style={{ height: 90 }} />
-    </ScrollView>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  loadingText: { color: '#7f8c8d', marginTop: 15, fontSize: 16 },
-  carouselContainer: { height: 220, backgroundColor: '#1a1a1a', justifyContent: 'flex-end' },
-  carouselImage: { position: 'absolute', width: '100%', height: '100%' },
-  overlay: { padding: 25, backgroundColor: 'rgba(0,0,0,0.3)' },
-  carouselTitle: { fontSize: 26, fontWeight: 'bold', color: '#fff', marginBottom: 8, letterSpacing: 0.5 },
-  carouselSubtitle: { fontSize: 15, color: '#e0e0e0', fontWeight: '500' },
-  dotsContainer: { position: 'absolute', bottom: 15, right: 20, flexDirection: 'row' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)', marginHorizontal: 4 },
-  dotActive: { backgroundColor: '#fff', width: 24, borderRadius: 4 },
-  contentBox: { backgroundColor: '#fff', margin: 20, padding: 24, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#0056b3' },
-  contentText: { fontSize: 15, color: '#555', lineHeight: 22, textAlign: 'left' },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', marginLeft: 20, marginBottom: 15, color: '#2C3E50' },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 20 },
-  categoryCard: { backgroundColor: '#fff', width: '48%', marginBottom: 20, borderRadius: 12, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 3 },
-  iconBg: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#f0f4f8', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  categoryImage: { width: 40, height: 40, borderRadius: 20 },
-  categoryName: { fontSize: 14, fontWeight: '700', color: '#34495E', textAlign: 'center' },
-  productCard: { backgroundColor: '#fff', width: '48%', marginBottom: 20, borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 3 },
-  productImage: { width: '100%', height: 110 },
-  productInfo: { padding: 15 },
-  productName: { fontSize: 15, fontWeight: 'bold', color: '#2C3E50', marginBottom: 6 },
-  productPrice: { fontSize: 13, color: '#0056b3', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
+  
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  backBtn: { padding: 5 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+
+  // Carte Produit
+  productCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  productImage: { width: 70, height: 70, borderRadius: 12, margin: 15 },
+  productInfo: { flex: 1, paddingVertical: 15 },
+  productHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  productName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', flex: 1 },
+  unavailableBadge: { backgroundColor: '#FEF2F2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, marginLeft: 10 },
+  unavailableText: { color: '#EF4444', fontSize: 10, fontWeight: 'bold' },
+  productPrice: { fontSize: 14, color: '#0056b3', fontWeight: '600' },
+
+  // Empty State
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, marginTop: 50 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginTop: 20 },
+  emptySubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginTop: 8 }
 });

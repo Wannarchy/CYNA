@@ -1,18 +1,22 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { View, Text, FlatList, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CartContext } from '../context/CartContext';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-// Typage strict pour éviter les erreurs rouges avec la navigation
-type NavProp = NativeStackNavigationProp<any>;
+// Imports mis à jour
+import { useCart } from '../context/CartContext';
+import { getFullImageUrl } from '../services/api';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
+// Typage strict de la navigation
+type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CartScreen() {
-  const { items, removeItem, getTotal } = useContext(CartContext);
-  const navigation = useNavigation<NavProp>();
+  // Utilisation du hook personnalisé et sécurisé
+  const { items, removeItem, updateQuantity, getTotal } = useCart();
+  const navigation = useNavigation<CartScreenNavigationProp>();
 
-  // Fonction pour supprimer avec une petite alerte de sécurité
   const handleRemove = (itemId: number, itemName: string) => {
     Alert.alert(
       "Supprimer",
@@ -33,7 +37,8 @@ export default function CartScreen() {
         <Text style={styles.emptySubText}>Découvrez nos solutions de cybersécurité</Text>
         <TouchableOpacity 
           style={styles.shopButton} 
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          // Navigation typée (cast to any to satisfy nested navigator params)
+          onPress={() => navigation.navigate('MainTabs' as any, { screen: 'Home' })}
         >
           <Text style={styles.shopButtonText}>Voir le catalogue</Text>
         </TouchableOpacity>
@@ -50,8 +55,8 @@ export default function CartScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <View style={styles.cartItem}>
-            {/* Image du produit */}
-            <Image source={{ uri: item.image_path }} style={styles.itemImage} />
+            {/* Image du produit - URL corrigée */}
+            <Image source={{ uri: getFullImageUrl(item.image_path) }} style={styles.itemImage} />
             
             {/* Infos du produit */}
             <View style={styles.itemInfo}>
@@ -61,13 +66,30 @@ export default function CartScreen() {
                   {item.cycle === 'monthly' ? 'Mensuel' : 'Annuel'}
                 </Text>
               </View>
+              
+              {/* Contrôles de quantité */}
+              <View style={styles.quantityContainer}>
+                <TouchableOpacity 
+                  style={styles.quantityButton} 
+                  onPress={() => updateQuantity(item.id, item.quantity - 1)}
+                >
+                  <Ionicons name="remove" size={16} color="#2C3E50" />
+                </TouchableOpacity>
+                <Text style={styles.quantityText}>{item.quantity}</Text>
+                <TouchableOpacity 
+                  style={styles.quantityButton} 
+                  onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                >
+                  <Ionicons name="add" size={16} color="#2C3E50" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Prix et Bouton Supprimer */}
             <View style={styles.itemRight}>
-              <Text style={styles.itemPrice}>{item.price.toFixed(2)} €</Text>
+              {/* Prix total pour cet article (prix unitaire * quantité) */}
+              <Text style={styles.itemPrice}>{(item.price * item.quantity).toFixed(2)} €</Text>
               
-              {/* TouchableOpacity avec un gros padding pour faciliter le clic sur Web et Mobile */}
               <TouchableOpacity 
                 style={styles.deleteButton} 
                 onPress={() => handleRemove(item.id, item.name)}
@@ -88,7 +110,7 @@ export default function CartScreen() {
         
         <TouchableOpacity 
           style={styles.checkoutButton}
-          // Navigation vers le tunnel d'achat
+          // Navigation typée
           onPress={() => navigation.navigate('Checkout')}
         >
           <Text style={styles.checkoutText}>Passer à la caisse</Text>
@@ -136,7 +158,7 @@ const styles = StyleSheet.create({
   },
   list: { 
     padding: 15, 
-    paddingBottom: 200 // Espace suffisant pour ne pas cacher les articles derrière le footer
+    paddingBottom: 200 
   },
   cartItem: {
     flexDirection: 'row',
@@ -172,17 +194,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, 
     paddingVertical: 4, 
     borderRadius: 4, 
-    alignSelf: 'flex-start' 
+    alignSelf: 'flex-start',
+    marginBottom: 10
   },
   itemCycle: { 
     fontSize: 12, 
     color: '#2980b9', 
     fontWeight: '600' 
   },
+  // Nouveaux styles pour les boutons de quantité
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  quantityButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#f0f4f8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    minWidth: 20,
+    textAlign: 'center',
+  },
   itemRight: { 
     alignItems: 'flex-end', 
     justifyContent: 'space-between', 
-    height: 60 
+    height: 80 // Un peu plus haut pour s'adapter aux boutons de quantité
   },
   itemPrice: { 
     fontSize: 16, 
@@ -191,12 +235,10 @@ const styles = StyleSheet.create({
     marginBottom: 10 
   },
   deleteButton: { 
-    padding: 10, // Rend la zone cliquable beaucoup plus grande
+    padding: 10,
     borderRadius: 20,
-    backgroundColor: '#ffeaea' // Léger fond rouge pour montrer que c'est cliquable
+    backgroundColor: '#ffeaea'
   },
-  
-  // Styles du pied de page
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -204,15 +246,12 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#FFFFFF',
     padding: 20,
+    paddingBottom: 30, // Un peu plus de marge en bas pour les téléphones avec encoche
     borderTopWidth: 1,
     borderColor: '#eee',
-    // Ombre pour flotter au-dessus de la liste
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowOffset: {
-        height: -5,
-        width: 0
-    },
+    shadowOffset: { height: -5, width: 0 },
     shadowRadius: 10,
     elevation: 10,
   },
@@ -235,13 +274,9 @@ const styles = StyleSheet.create({
     padding: 18, 
     borderRadius: 12, 
     alignItems: 'center',
-    // Ombre verte pour le bouton d'action principal
     shadowColor: '#27ae60',
     shadowOpacity: 0.3,
-    shadowOffset: {
-        height: 4,
-        width: 0
-    },
+    shadowOffset: { height: 4, width: 0 },
     shadowRadius: 8,
     elevation: 5
   },

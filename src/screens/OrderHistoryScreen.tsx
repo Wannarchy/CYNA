@@ -1,144 +1,145 @@
 import React, { useState } from 'react';
-import { View, Text, SectionList, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { mockOrders, MockOrder } from '../data/mockData';
+import { useQuery } from '@tanstack/react-query';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api, { API_BASE_URL } from '../services/api';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
+type OrderHistoryScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface Order {
+  id: string;
+  created_at: string;
+  total_price: number;
+  status: string;
+}
 
 export default function OrderHistoryScreen() {
-  const navigation = useNavigation<any>();
-  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigation = useNavigation<OrderHistoryScreenNavigationProp>();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // Formater la date en français
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const { data: ordersResponse, isLoading } = useQuery({
+    queryKey: ['orders'],
+    queryFn: async () => (await api.get('/orders')).data,
+  });
+
+  // --- DÉBALLAGE DES DONNÉES LARAVEL ---
+  const rawOrders = ordersResponse?.data ?? ordersResponse;
+  const orders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
+
+  const handleDownloadInvoice = async (orderId: string) => {
+    setDownloadingId(orderId);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const apiUrl = `${API_BASE_URL}/orders/${orderId}/invoice`;
+     const localPath = `${(FileSystem as any).documentDirectory}facture_${orderId}.pdf`;
+
+      const { uri } = await (FileSystem as any).downloadAsync(
+        apiUrl,
+        localPath,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert('Succès', 'Facture téléchargée dans vos documents.');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de télécharger la facture.');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
-  // Filtrage par recherche
-  const filteredOrders = mockOrders.filter(order => 
-    order.items.some(item => item.product_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    formatDate(order.created_at).includes(searchQuery)
+  const renderOrder = ({ item }: { item: Order }) => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View>
+          <Text style={styles.orderId}>Commande #{item.id.substring(0, 8)}</Text>
+          <Text style={styles.orderDate}>{new Date(item.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</Text>
+        </View>
+        <View style={[styles.statusBadge, item.status === 'paid' ? styles.statusSuccess : styles.statusPending]}>
+          <Text style={styles.statusText}>{item.status === 'paid' ? 'Payée' : 'En cours'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.totalAmount}>{Number(item.total_price).toFixed(2)} €</Text>
+        
+        <TouchableOpacity 
+          style={styles.invoiceBtn} 
+          onPress={() => handleDownloadInvoice(item.id)}
+          disabled={downloadingId === item.id}
+        >
+          {downloadingId === item.id ? (
+            <ActivityIndicator size="small" color="#0056b3" />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={16} color="#0056b3" />
+              <Text style={styles.invoiceBtnText}>Facture PDF</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 
-  // Regroupement par année
-  const groupedOrders = filteredOrders.reduce((acc, order) => {
-    const year = new Date(order.created_at).getFullYear().toString();
-    if (!acc[year]) acc[year] = [];
-    acc[year].push(order);
-    return acc;
-  }, {} as Record<string, MockOrder[]>);
-
-  const sections = Object.keys(groupedOrders).sort((a, b) => parseInt(b) - parseInt(a)).map(year => ({
-    title: year,
-    data: groupedOrders[year]
-  }));
-
-  const renderOrder = ({ item }: { item: MockOrder }) => {
-    const isExpanded = expandedOrderId === item.id;
-
-    return (
-      <View style={styles.orderCard}>
-        <TouchableOpacity style={styles.orderHeader} onPress={() => setExpandedOrderId(isExpanded ? null : item.id)}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.orderName}>{item.items[0].product_name}</Text>
-            <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.orderTotal}>{item.total.toFixed(2)} €</Text>
-            <View style={[styles.badge, item.status === 'paid' ? styles.badgePaid : styles.badgePending]}>
-              <Text style={styles.badgeText}>{item.status === 'paid' ? 'Payée' : 'En attente'}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* DÉTAILS DE LA COMMANDE (Affiché si déplié) */}
-        {isExpanded && (
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Abonnement :</Text>
-              <Text style={styles.detailValue}>{item.items[0].cycle === 'monthly' ? 'Mensuel' : 'Annuel'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Paiement :</Text>
-              <Text style={styles.detailValue}>**** **** **** {item.card_last4}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Facturation :</Text>
-              <Text style={styles.detailValue}>{item.billing_address}</Text>
-            </View>
-            
-            <TouchableOpacity style={styles.pdfButton} onPress={() => alert("Téléchargement de la facture PDF (Fonctionnalité finale avec l'API)")}>
-              <Ionicons name="document-text-outline" size={20} color="#0056b3" />
-              <Text style={styles.pdfButtonText}>Télécharger la facture (PDF)</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
+  if (isLoading) {
+    return <View style={styles.center}><ActivityIndicator size="large" color="#0056b3" /></View>;
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Retour</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#1E293B" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mes commandes</Text>
-        <View style={{ width: 50 }} />
+        <Text style={styles.headerTitle}>Mes Commandes</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#7f8c8d" style={{ marginLeft: 15 }} />
-        <TextInput 
-          style={styles.searchInput}
-          placeholder="Rechercher par nom ou date..."
-          placeholderTextColor="#aaa"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id.toString()}
+      <FlatList
+        data={orders}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ padding: 20, flexGrow: 1 }}
         renderItem={renderOrder}
-        renderSectionHeader={({ section: { title } }) => (
-          <View style={styles.yearHeader}>
-            <Text style={styles.yearText}>{title}</Text>
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="receipt-outline" size={80} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>Aucune commande</Text>
+            <Text style={styles.emptySubtitle}>Vous n'avez pas encore passé de commande.</Text>
           </View>
-        )}
-        contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={<Text style={styles.emptyText}>Aucune commande trouvée.</Text>}
+        }
       />
     </View>
   );
 }
 
-
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff' },
-  backText: { color: '#0056b3', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#2C3E50' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 15, marginBottom: 15, borderRadius: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  searchInput: { flex: 1, padding: 12, fontSize: 16, color: '#2C3E50' },
-  yearHeader: { backgroundColor: '#e0e0e0', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8, marginBottom: 10, marginTop: 5 },
-  yearText: { fontSize: 18, fontWeight: 'bold', color: '#2C3E50' },
-  orderCard: { backgroundColor: '#fff', borderRadius: 10, marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, alignItems: 'center' },
-  orderName: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
-  orderDate: { fontSize: 13, color: '#7f8c8d', marginTop: 4 },
-  orderTotal: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginTop: 6 },
-  badgePaid: { backgroundColor: '#e8f5e9' },
-  badgePending: { backgroundColor: '#fff3cd' },
-  badgeText: { fontSize: 12, fontWeight: 'bold', color: '#2e7d32' },
-  detailsContainer: { borderTopWidth: 1, borderColor: '#eee', padding: 15, backgroundColor: '#fafafa' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  detailLabel: { fontSize: 14, color: '#7f8c8d' },
-  detailValue: { fontSize: 14, color: '#2C3E50', fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 10 },
-  pdfButton: { flexDirection: 'row', backgroundColor: '#eaf2f8', padding: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  pdfButtonText: { color: '#0056b3', fontSize: 14, fontWeight: 'bold', marginLeft: 8 },
-  emptyText: { textAlign: 'center', color: '#7f8c8d', marginTop: 50, fontSize: 16 }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  backBtn: { padding: 5 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 15, elevation: 2, borderWidth: 1, borderColor: '#F1F5F9' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  orderId: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  orderDate: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  statusSuccess: { backgroundColor: '#ecfdf5' },
+  statusPending: { backgroundColor: '#fef3c7' },
+  statusText: { fontSize: 12, fontWeight: 'bold', color: '#10b981' }, 
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15 },
+  totalAmount: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  invoiceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 10, gap: 6 },
+  invoiceBtnText: { color: '#0056b3', fontSize: 14, fontWeight: '600' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginTop: 20 },
+  emptySubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginTop: 8 }
 });

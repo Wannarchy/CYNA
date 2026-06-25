@@ -1,46 +1,51 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CartContext } from '../context/CartContext';
-import { AuthContext } from '../context/AuthContext';
-import { mockAddresses } from '../data/mockData'; // On utilise le mock des adresses pour l'instant
 
-type NavProp = NativeStackNavigationProp<any>;
+// Import des hooks sécurisés et types
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import { mockAddresses } from '../data/mockData';
+
+type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CheckoutScreen() {
-  const navigation = useNavigation<NavProp>();
-  const { items, getTotal, clearCart } = useContext(CartContext);
-  const { isLoggedIn, user } = useContext(AuthContext);
+  const navigation = useNavigation<CheckoutScreenNavigationProp>();
+  const { items, getTotal, clearCart } = useCart();
+  const { isLoggedIn, user } = useAuth();
   
   const [step, setStep] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false); // Pour bloquer le bouton payer
   
   // Gestion des adresses
   const [useExistingAddress, setUseExistingAddress] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   
-  // Formulaire d'adresse complet (Selon votre BDD : user_addresses)
+  // Formulaire d'adresse
   const [address, setAddress] = useState({
     prenom: user?.prenom || '',
     nom: user?.nom || '',
     adresse1: '',
-    adresse2: '', // AJOUT
+    adresse2: '',
     ville: '',
-    region: '', // AJOUT
+    region: '',
     code_postal: '',
     pays: 'France',
     telephone: ''
   });
 
-  const [card, setCard] = useState({ number: '4242 4242 4242 4242', exp: '12/28', cvv: '123', name: 'Jean Dupont' });
+  // Pour la simulation, on garde les infos en dur
+  const [card] = useState({ number: '4242 4242 4242 4242', exp: '12/28', cvv: '123', name: 'Jean Dupont' });
 
   const handleNext = () => {
-    if (step === 1) {
-      if (!isLoggedIn) {
-        Alert.alert("Information", "Vous devez être connecté ou créer un compte pour finaliser la commande.");
-        return;
-      }
+    if (step === 1 && !isLoggedIn) {
+      Alert.alert("Connexion requise", "Vous devez être connecté ou créer un compte pour finaliser la commande.");
+      return;
     }
+    
     if (step === 2) {
       if (useExistingAddress && !selectedAddressId) {
         Alert.alert('Erreur', 'Veuillez sélectionner une adresse existante.');
@@ -54,10 +59,33 @@ export default function CheckoutScreen() {
     if (step < 3) setStep(step + 1);
   };
 
-  const handlePay = () => {
-    Alert.alert("Paiement accepté", "Votre commande a été validée !", [
-      { text: "OK", onPress: () => { clearCart(); navigation.replace('OrderSuccess'); }}
-    ]);
+  const handlePay = async () => {
+    // Empêche le double-clic
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // --- ICI ON FERA L'APPEL API LARAVEL ---
+      // Exemple de ce qu'il faudra faire plus tard :
+      // const response = await api.post('/orders', {
+      //   items: items.map(i => ({ product_id: i.id, quantity: i.quantity, cycle: i.cycle })),
+      //   address: useExistingAddress ? { id: selectedAddressId } : address,
+      //   payment_method: 'stripe_simulation'
+      // });
+
+      // Pour l'instant, on simule une requête réseau de 1.5 seconde
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Succès !
+      clearCart();
+      navigation.replace('OrderSuccess', {});
+      
+    } catch (error) {
+      Alert.alert('Erreur de paiement', "Une erreur est survenue lors de la transaction. Veuillez réessayer.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -83,16 +111,15 @@ export default function CheckoutScreen() {
               </View>
             ) : (
               <View style={styles.card}>
-                <Text style={styles.userInfo}>Vous n'êtes pas connecté.</Text>
+                <Text style={styles.userInfo}>Vous devez être connecté pour continuer.</Text>
                 <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Login')}>
                   <Text style={styles.linkText}>Se connecter / Créer un compte</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.guestButton} onPress={handleNext}>
-                  <Text style={styles.guestButtonText}>Continuer en invité</Text>
-                </TouchableOpacity>
               </View>
             )}
-            <TouchableOpacity style={styles.mainButton} onPress={handleNext}><Text style={styles.mainButtonText}>Suivant</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.mainButton} onPress={handleNext}>
+              <Text style={styles.mainButtonText}>Suivant</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -101,7 +128,6 @@ export default function CheckoutScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Adresse de facturation</Text>
             
-            {/* Toggle pour choisir une adresse existante */}
             {isLoggedIn && (
               <TouchableOpacity style={styles.existingAddressToggle} onPress={() => setUseExistingAddress(!useExistingAddress)}>
                 <Text style={styles.toggleText}>Utiliser une adresse existante</Text>
@@ -111,7 +137,6 @@ export default function CheckoutScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Liste des adresses existantes */}
             {useExistingAddress && (
               <View style={{ marginBottom: 20 }}>
                 {mockAddresses.map((addr) => (
@@ -130,7 +155,6 @@ export default function CheckoutScreen() {
               </View>
             )}
 
-            {/* Formulaire d'adresse complète */}
             {!useExistingAddress && (
               <>
                 <View style={styles.row}>
@@ -149,7 +173,9 @@ export default function CheckoutScreen() {
                 </View>
               </>
             )}
-            <TouchableOpacity style={styles.mainButton} onPress={handleNext}><Text style={styles.mainButtonText}>Vérifier ma commande</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.mainButton} onPress={handleNext}>
+              <Text style={styles.mainButtonText}>Vérifier ma commande</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -161,8 +187,8 @@ export default function CheckoutScreen() {
               <Text style={styles.summaryTitle}>Récapitulatif</Text>
               {items.map(item => (
                 <View key={item.id} style={styles.summaryRow}>
-                  <Text style={styles.summaryItemName}>{item.name} ({item.cycle === 'monthly' ? 'Mensuel' : 'Annuel'})</Text>
-                  <Text style={styles.summaryPrice}>{item.price.toFixed(2)} €</Text>
+                  <Text style={styles.summaryItemName}>{item.name} ({item.cycle === 'monthly' ? 'Mensuel' : 'Annuel'}) x{item.quantity}</Text>
+                  <Text style={styles.summaryPrice}>{(item.price * item.quantity).toFixed(2)} €</Text>
                 </View>
               ))}
               <View style={styles.separator} />
@@ -179,7 +205,19 @@ export default function CheckoutScreen() {
               <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVV" value={card.cvv} editable={false} keyboardType="numeric" />
             </View>
             <Text style={styles.secureNote}>🔒 Paiement sécurisé par Stripe (Simulation)</Text>
-            <TouchableOpacity style={styles.payButton} onPress={handlePay}><Text style={styles.payButtonText}>Payer {getTotal().toFixed(2)} €</Text></TouchableOpacity>
+            
+            {/* Bouton de paiement avec état de chargement */}
+            <TouchableOpacity 
+              style={[styles.payButton, isProcessing && { backgroundColor: '#a0d8b4' }]} 
+              onPress={handlePay}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.payButtonText}>Payer {getTotal().toFixed(2)} €</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -188,6 +226,7 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ... (Tes styles restent exactement les mêmes, je les raccourcis pour l'affichage ici, mais garde les tiens !)
   container: { flex: 1, backgroundColor: '#F5F7FA' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff' },
   backText: { color: '#0056b3', fontSize: 16, fontWeight: '600' },
@@ -202,15 +241,11 @@ const styles = StyleSheet.create({
   userInfo: { fontSize: 16, color: '#555', marginBottom: 15 },
   linkButton: { marginBottom: 15 },
   linkText: { color: '#0056b3', fontSize: 16, fontWeight: 'bold' },
-  guestButton: { backgroundColor: '#ecf0f1', padding: 15, borderRadius: 8, alignItems: 'center' },
-  guestButtonText: { color: '#7f8c8d', fontSize: 15, fontWeight: '600' },
   row: { flexDirection: 'row' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dcdde1', borderRadius: 8, padding: 15, fontSize: 16, marginBottom: 15, color: '#2C3E50' },
   label: { fontSize: 14, fontWeight: '600', color: '#34495E', marginBottom: 8, marginTop: 10 },
   mainButton: { backgroundColor: '#0056b3', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 20 },
   mainButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  
-  // Nouveaux styles pour les adresses existantes
   existingAddressToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#dcdde1', marginBottom: 20 },
   toggleText: { fontSize: 15, color: '#34495E', fontWeight: '600' },
   switchTrack: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#dcdde1', justifyContent: 'center', padding: 2 },
@@ -223,7 +258,6 @@ const styles = StyleSheet.create({
   radioActive: { borderColor: '#0056b3', backgroundColor: '#0056b3' },
   addressLabel: { fontSize: 15, fontWeight: 'bold', color: '#2C3E50', flex: 1 },
   addressText: { fontSize: 13, color: '#7f8c8d', marginTop: 5, marginLeft: 35 },
-
   summaryCard: { backgroundColor: '#fff', padding: 20, borderRadius: 10, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
   summaryTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 15, color: '#2C3E50' },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
@@ -233,9 +267,6 @@ const styles = StyleSheet.create({
   totalText: { fontSize: 18, fontWeight: 'bold', color: '#2C3E50' },
   totalAmount: { fontSize: 20, fontWeight: 'bold', color: '#0056b3' },
   secureNote: { textAlign: 'center', color: '#27ae60', fontSize: 12, marginTop: 10, marginBottom: 20 },
-  payButton: { backgroundColor: '#27ae60', padding: 18, borderRadius: 10, alignItems: 'center', shadowColor: '#27ae60', shadowOpacity: 0.3, shadowOffset: {
-      height: 4,
-      width: 0
-  }, shadowRadius: 8, elevation: 5 },
+  payButton: { backgroundColor: '#27ae60', padding: 18, borderRadius: 10, alignItems: 'center', shadowColor: '#27ae60', shadowOpacity: 0.3, shadowOffset: { height: 4, width: 0 }, shadowRadius: 8, elevation: 5 },
   payButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });

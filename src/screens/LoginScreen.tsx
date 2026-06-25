@@ -1,120 +1,127 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { AuthContext } from '../context/AuthContext';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
-type NavProp = NativeStackNavigationProp<any>;
+type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function LoginScreen() {
-  const navigation = useNavigation<NavProp>();
-  const { login, isLoading } = useContext(AuthContext);
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login, isLoading } = useAuth();
   
-  // État local pour savoir si le mot de passe est visible ou masqué
   const [showPassword, setShowPassword] = useState(false);
-  
-  // État local pour voir ce que l'utilisateur tape en temps réel (pour le débogage ou s'il s'est trompé)
-  const [currentTypedPassword, setCurrentTypedPassword] = useState('');
-
-  const [email, setEmail] = useState(''); // Laissez vide pour le test
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
-    if (!email || !currentTypedPassword) {
+    if (!email || !password) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
       return;
     }
     
-    const success = await login(email, currentTypedPassword);
-    if (success) {
-      if (navigation.canGoBack()) {
-        navigation.goBack(); // Retourne là où l'utilisateur était avant de cliquer sur "Se connecter"
-      } else {
-        navigation.navigate('MainTabs', { screen: 'Account' }); // Sinon va sur l'espace client
-      }
-    }
+    // On appelle login(). S'il réussit, le AuthContext va automatiquement
+    // basculer isLoggedIn à true, et l'AppNavigator va changer d'écran tout seul !
+    // Inutile de faire un navigation.navigate ici.
+    await login(email, password);
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backButtonText}>← Retour</Text>
-      </TouchableOpacity>
+    <KeyboardAvoidingView 
+      style={{ flex: 1, backgroundColor: '#F8FAFC' }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        
+        {/* En-tête SaaS */}
+        <View style={styles.header}>
+          <View style={styles.logoCircle}>
+            <Ionicons name="shield-checkmark" size={40} color="#fff" />
+          </View>
+          <Text style={styles.title}>Bienvenue</Text>
+          <Text style={styles.subtitle}>Connectez-vous pour accéder à votre espace sécurisé</Text>
+        </View>
 
-      <Text style={styles.title}>Connexion</Text>
-      <Text style={styles.subtitle}>Accédez à vos abonnements SaaS</Text>
+        {/* Formulaire */}
+        <View style={styles.formContainer}>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="mail-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input} 
+              value={email} 
+              onChangeText={setEmail} 
+              keyboardType="email-address" 
+              autoCapitalize="none" 
+              placeholder="Adresse e-mail"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Adresse e-mail</Text>
-        <TextInput 
-          style={styles.input} 
-          value={email} 
-          onChangeText={setEmail} 
-          keyboardType="email-address" 
-          autoCapitalize="none" 
-          placeholder="votre@email.com"
-          placeholderTextColor="#aaa"
-        />
-      </View>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+            <TextInput 
+              style={[styles.input, { flex: 1 }]} 
+              value={password} 
+              onChangeText={setPassword} 
+              secureTextEntry={!showPassword} 
+              placeholder="Mot de passe"
+              placeholderTextColor="#94a3b8"
+            />
+            <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#64748b" />
+            </TouchableOpacity>
+          </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Mot de passe</Text>
-        <View style={styles.passwordRow}>
-          <TextInput 
-            style={[styles.input, { flex: 1 }]} 
-            value={currentTypedPassword} 
-            onChangeText={setCurrentTypedPassword} 
-            secureTextEntry={!showPassword} // S'inverse la sécurité selon l'état du toggle
-          />
-          
-          {/* Bouton Œil pour masquer/afficher le mot de passe */}
           <TouchableOpacity 
-            style={styles.eyeButton} 
-            onPress={() => setShowPassword(!showPassword)}
+            style={styles.forgotPassword} 
+            onPress={() => navigation.navigate('ForgotPassword')}
           >
-            <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+            <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={isLoading}>
+            {isLoading ? (
+              <Text style={styles.buttonText}>Connexion en cours...</Text>
+            ) : (
+              <Text style={styles.buttonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
         </View>
-      </View>
 
-      <TouchableOpacity style={styles.forgotPassword} onPress={() => Alert.alert("Mot de passe oublié", "La fonctionnalité de réinitialisation sera bientôt disponible.")}>
-        <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
-      </TouchableOpacity>
-
-      {isLoading ? (
-        <ActivityIndicator size="large" color="#0056b3" style={{ marginTop: 20 }} />
-      ) : (
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Se connecter</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+        {/* Lien vers l'inscription */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Vous n'avez pas de compte ?</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <Text style={styles.footerLink}> Créer un compte</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 25, paddingTop: 60 },
-  backButton: { marginBottom: 30 },
-  backButtonText: { color: '#0056b3', fontSize: 16, fontWeight: '600' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#2C3E50' },
-  subtitle: { fontSize: 15, color: '#7f8c8d', marginTop: 5, marginBottom: 30 },
-  inputContainer: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#34495E', marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: '#dcdde1', borderRadius: 8, padding: 15, fontSize: 16, color: '#2C3E50' },
-  passwordRow: { flexDirection: 'row', alignItems: 'center' },
-  eyeButton: { 
-    backgroundColor: '#f0f2f5', 
-    width: 50, 
-    height: 50, 
-    borderRadius: 25, 
-    justifyContent: 'center', 
-    marginLeft: 10 
-  },
-  eyeIcon: { fontSize: 24 },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 25 },
+  header: { alignItems: 'center', marginBottom: 40 },
+  logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#0056b3', justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowColor: '#0056b3', shadowOpacity: 0.3, shadowOffset: { height: 4, width: 0 }, shadowRadius: 10, elevation: 5 },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#1E293B' },
+  subtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginTop: 8, paddingHorizontal: 20 },
+  
+  formContainer: { marginBottom: 20 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, marginBottom: 15, paddingHorizontal: 15, height: 55 },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, color: '#1E293B', fontSize: 16 },
+  eyeButton: { padding: 5 },
+  
   forgotPassword: { alignSelf: 'flex-end', marginBottom: 20 },
   forgotPasswordText: { color: '#0056b3', fontSize: 14, fontWeight: '600' },
-  button: { backgroundColor: '#0056b3', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 10, shadowColor: '#0056b3', shadowOpacity: 0.2, shadowOffset: {
-      height: 4,
-      width: 0
-  }, shadowRadius: 8, elevation: 4 },
+  
+  button: { backgroundColor: '#0056b3', padding: 18, borderRadius: 12, alignItems: 'center', shadowColor: '#0056b3', shadowOpacity: 0.3, shadowOffset: { height: 4, width: 0 }, shadowRadius: 8, elevation: 5 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+  footerText: { color: '#64748B', fontSize: 14 },
+  footerLink: { color: '#0056b3', fontSize: 14, fontWeight: 'bold' }
 });

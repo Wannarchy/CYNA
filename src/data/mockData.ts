@@ -78,6 +78,7 @@ export interface MockOrder {
 }
 
 export interface MockAddress {
+  pays: string;
   id: number;
   label: string;
   prenom: string;
@@ -119,6 +120,12 @@ export const mockOrders: MockOrder[] = [
 ];
 
 export const mockAddresses: MockAddress[] = [
-  { id: 1, label: 'Bureau', prenom: 'Teo', nom: 'Rebelo', adresse1: '24 Avenue gambetta', ville: 'Paris', code_postal: '75001', is_default: true },
-  { id: 2, label: 'Personnel', prenom: 'Teo', nom: 'Rebelo', adresse1: '10 Rue de la paix', ville: 'Lyon', code_postal: '69001', is_default: false }
+  {
+    id: 1, label: 'Bureau', prenom: 'Teo', nom: 'Rebelo', adresse1: '24 Avenue gambetta', ville: 'Paris', code_postal: '75001', is_default: true,
+    pays: ''
+  },
+  {
+    id: 2, label: 'Personnel', prenom: 'Teo', nom: 'Rebelo', adresse1: '10 Rue de la paix', ville: 'Lyon', code_postal: '69001', is_default: false,
+    pays: ''
+  }
 ];
